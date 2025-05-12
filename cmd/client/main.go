@@ -3,8 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
+
 	"github.com/bennytemmerman/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bennytemmerman/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bennytemmerman/learn-pub-sub-starter/internal/routing"
@@ -25,43 +24,52 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not get username: %v", err)
 	}
-
-	username := gamelogic.GetUsername()
 	gs := gamelogic.NewGameState(username)
 
-	err = pubsub.SubscribeJSON[routing.PlayingState](
+	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
-		"pause."+username,
-		routing.PauseKey,
-		pubsub.TransientQueue,
-		handlerPause(gs),
-	)
-	if err != nil {
-		log.Fatalf("could not subscribe to pause messages: %v", err)
-	}
-
-	_, queue, err := pubsub.DeclareAndBind(
-		conn,
-		routing.ExchangePerilDirect,
-		routing.PauseKey+"."+username,
+		routing.PauseKey+"."+gs.GetUsername(),
 		routing.PauseKey,
 		pubsub.SimpleQueueTransient,
+		handlerPause(gs),
 	)
 	if err != nil {
 		log.Fatalf("could not subscribe to pause: %v", err)
 	}
-	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
-	// wait for ctrl+c
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
-}
+	for {
+		words := gamelogic.GetInput()
+		if len(words) == 0 {
+			continue
+		}
+		switch words[0] {
+		case "move":
+			_, err := gs.CommandMove(words)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
 
-func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
-	return func(state routing.PlayingState) {
-		defer fmt.Print("> ")
-		gs.HandlePause(state.IsPaused)
+			// TODO: publish the move
+		case "spawn":
+			err = gs.CommandSpawn(words)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+		case "status":
+			gs.CommandStatus()
+		case "help":
+			gamelogic.PrintClientHelp()
+		case "spam":
+			// TODO: publish n malicious logs
+			fmt.Println("Spamming not allowed yet!")
+		case "quit":
+			gamelogic.PrintQuit()
+			return
+		default:
+			fmt.Println("unknown command")
+		}
 	}
 }
