@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -13,17 +14,6 @@ const (
 	TransientQueue = iota
 	DurableQueue
 )
-
-func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
-	dat, err := json.Marshal(val)
-	if err != nil {
-		return err
-	}
-	return ch.PublishWithContext(context.Background(), exchange, key, false, false, amqp.Publishing{
-		ContentType: "application/json",
-		Body:        dat,
-	})
-}
 
 // SubscribeJSON subscribes to a queue, consuming and decoding JSON messages of type T.
 func SubscribeJSON[T any](

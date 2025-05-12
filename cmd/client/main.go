@@ -26,6 +26,21 @@ func main() {
 		log.Fatalf("could not get username: %v", err)
 	}
 
+	username := gamelogic.GetUsername()
+	gs := gamelogic.NewGameState(username)
+
+	err = pubsub.SubscribeJSON[routing.PlayingState](
+		conn,
+		routing.ExchangePerilDirect,
+		"pause."+username,
+		routing.PauseKey,
+		pubsub.TransientQueue,
+		handlerPause(gs),
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to pause messages: %v", err)
+	}
+
 	_, queue, err := pubsub.DeclareAndBind(
 		conn,
 		routing.ExchangePerilDirect,
@@ -42,4 +57,11 @@ func main() {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 	<-signalChan
+}
+
+func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
+	return func(state routing.PlayingState) {
+		defer fmt.Print("> ")
+		gs.HandlePause(state.IsPaused)
+	}
 }
